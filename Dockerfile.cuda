@@ -1,0 +1,23 @@
+FROM python:3.10-slim
+
+WORKDIR /usr/app
+
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update --fix-missing \
+    && apt-get install -y --no-install-recommends sox libsox-fmt-mp3 opus-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements_docker.txt .
+ARG TORCH_CUDA_INDEX_URL=https://download.pytorch.org/whl/cu121
+ARG TORCH_PACKAGE=torch==2.2.2+cu121
+RUN pip3 install --no-cache-dir --index-url ${TORCH_CUDA_INDEX_URL} ${TORCH_PACKAGE} \
+    && pip3 install --no-cache-dir -r requirements_docker.txt \
+    && pip3 uninstall -y triton sympy networkx jinja2 fsspec
+
+COPY app ./app
+COPY main.py ./main.py
+
+EXPOSE 9898
+
+CMD [ "python3", "-u", "./main.py" ]
