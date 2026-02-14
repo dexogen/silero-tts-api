@@ -78,3 +78,75 @@ def test_post_audio_speech_unknown_response_format_returns_400(client: TestClien
     payload = response.json()
     assert payload['error']['type'] == 'invalid_request_error'
     assert payload['error']['param'] == 'response_format'
+
+
+def test_post_audio_speech_put_accent_must_be_boolean(client: TestClient):
+    response = client.post(
+        '/v1/audio/speech',
+        json={
+            'model': 'tts-1',
+            'voice': 'xenia',
+            'input': 'test',
+            'put_accent': 'yes',
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload['error']['type'] == 'invalid_request_error'
+    assert payload['error']['param'] == 'put_accent'
+
+
+def test_post_audio_speech_forwards_homograph_and_accent_flags(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    captured_kwargs = {}
+
+    class SpyEngine:
+        def synthesize(
+            self,
+            model_name: str,
+            voice: str,
+            text: str,
+            response_format: str,
+            sample_rate: int,
+            speed: float,
+            bitrate: object | None = None,
+            put_accent: bool = True,
+            put_yo: bool = True,
+            put_stress_homo: bool = True,
+            put_yo_homo: bool = True,
+        ) -> bytes:
+            captured_kwargs.update(
+                {
+                    'put_accent': put_accent,
+                    'put_yo': put_yo,
+                    'put_stress_homo': put_stress_homo,
+                    'put_yo_homo': put_yo_homo,
+                }
+            )
+            return b'FAKE_AUDIO'
+
+    monkeypatch.setattr('app.handlers.get_tts_engine_dependency', lambda: SpyEngine())
+
+    response = client.post(
+        '/v1/audio/speech',
+        json={
+            'model': 'tts-1',
+            'voice': 'xenia',
+            'input': 'Пот+ом замок откр+оется.',
+            'response_format': 'wav',
+            'put_accent': False,
+            'put_yo': False,
+            'put_stress_homo': False,
+            'put_yo_homo': False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured_kwargs == {
+        'put_accent': False,
+        'put_yo': False,
+        'put_stress_homo': False,
+        'put_yo_homo': False,
+    }

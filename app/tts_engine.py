@@ -1,3 +1,4 @@
+import inspect
 import io
 import logging
 import math
@@ -11,6 +12,7 @@ import tempfile
 import threading
 import wave
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -274,6 +276,10 @@ class MockTTSEngine:
         sample_rate: int,
         speed: float,
         bitrate: object | None = None,
+        put_accent: bool = True,
+        put_yo: bool = True,
+        put_stress_homo: bool = True,
+        put_yo_homo: bool = True,
     ) -> bytes:
         normalized_text = normalize_tts_text(text)
         if not normalized_text:
@@ -313,6 +319,8 @@ class MockTTSEngine:
 
 
 class SileroTTSEngine:
+    _OPTIONAL_APPLY_TTS_FLAGS = ('put_accent', 'put_yo', 'put_stress_homo', 'put_yo_homo')
+
     def __init__(self):
         if torch is None:
             raise SileroEngineError(
@@ -601,6 +609,40 @@ class SileroTTSEngine:
 
         return str(bitrate_value)
 
+    @staticmethod
+    def _build_apply_tts_kwargs(
+        model: Any,
+        text: str,
+        speaker: str,
+        sample_rate: int,
+        put_accent: bool,
+        put_yo: bool,
+        put_stress_homo: bool,
+        put_yo_homo: bool,
+    ) -> dict[str, object]:
+        apply_kwargs: dict[str, object] = {
+            'text': text,
+            'speaker': speaker,
+            'sample_rate': sample_rate,
+        }
+        optional_kwargs = {
+            'put_accent': put_accent,
+            'put_yo': put_yo,
+            'put_stress_homo': put_stress_homo,
+            'put_yo_homo': put_yo_homo,
+        }
+
+        try:
+            parameters = inspect.signature(model.apply_tts).parameters
+        except (AttributeError, TypeError, ValueError):
+            apply_kwargs.update(optional_kwargs)
+            return apply_kwargs
+
+        for key, value in optional_kwargs.items():
+            if key in parameters:
+                apply_kwargs[key] = value
+        return apply_kwargs
+
     def synthesize(
         self,
         model_name: str,
@@ -610,6 +652,10 @@ class SileroTTSEngine:
         sample_rate: int,
         speed: float,
         bitrate: object | None = None,
+        put_accent: bool = True,
+        put_yo: bool = True,
+        put_stress_homo: bool = True,
+        put_yo_homo: bool = True,
     ) -> bytes:
         normalized_text = normalize_tts_text(text)
         if not normalized_text:
@@ -636,12 +682,36 @@ class SileroTTSEngine:
             raise SileroEngineError("Parameter 'speed' must be between 0.25 and 4.0.", 'speed', 400)
 
         model = self._load_model(mapping)
+        apply_tts_kwargs = self._build_apply_tts_kwargs(
+            model=model,
+            text=normalized_text,
+            speaker=resolved_voice,
+            sample_rate=sample_rate,
+            put_accent=put_accent,
+            put_yo=put_yo,
+            put_stress_homo=put_stress_homo,
+            put_yo_homo=put_yo_homo,
+        )
         with torch.no_grad():
-            audio_tensor = model.apply_tts(
-                text=normalized_text,
-                speaker=resolved_voice,
-                sample_rate=sample_rate,
-            )
+            try:
+                audio_tensor = model.apply_tts(**apply_tts_kwargs)
+            except TypeError as error:
+                message = str(error)
+                unsupported_flag = 'unexpected keyword argument' in message and any(
+                    flag_name in message for flag_name in self._OPTIONAL_APPLY_TTS_FLAGS
+                )
+                if not unsupported_flag:
+                    raise
+
+                logger.warning(
+                    'Silero model.apply_tts does not support one or more accent/homograph flags; falling back.'
+                )
+                fallback_kwargs = {
+                    key: value
+                    for key, value in apply_tts_kwargs.items()
+                    if key not in self._OPTIONAL_APPLY_TTS_FLAGS
+                }
+                audio_tensor = model.apply_tts(**fallback_kwargs)
 
         if not isinstance(audio_tensor, torch.Tensor):
             audio_tensor = torch.tensor(audio_tensor)

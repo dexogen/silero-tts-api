@@ -34,6 +34,10 @@ class TTSEngineProtocol(Protocol):
         sample_rate: int,
         speed: float,
         bitrate: object | None = None,
+        put_accent: bool = True,
+        put_yo: bool = True,
+        put_stress_homo: bool = True,
+        put_yo_homo: bool = True,
     ) -> bytes: ...
 
 
@@ -126,7 +130,16 @@ def _parse_sample_rate(payload: dict[str, Any]) -> int:
     return sample_rate_value
 
 
-def _parse_speech_payload(payload: Any) -> tuple[str, str, str, str, int, float, object | None]:
+def _parse_optional_bool(payload: dict[str, Any], key: str, default: bool) -> bool:
+    value = payload.get(key, default)
+    if isinstance(value, bool):
+        return value
+    raise SileroEngineError(f"Parameter '{key}' must be a boolean.", key, 422)
+
+
+def _parse_speech_payload(
+    payload: Any,
+) -> tuple[str, str, str, str, int, float, object | None, bool, bool, bool, bool]:
     if not isinstance(payload, dict):
         raise SileroEngineError('JSON body must be an object.', None, 422)
 
@@ -148,7 +161,23 @@ def _parse_speech_payload(payload: Any) -> tuple[str, str, str, str, int, float,
     sample_rate = _parse_sample_rate(payload)
     speed = _parse_speed(payload)
     bitrate = payload.get('bitrate')
-    return model, voice, input_text, response_format, sample_rate, speed, bitrate
+    put_accent = _parse_optional_bool(payload, 'put_accent', True)
+    put_yo = _parse_optional_bool(payload, 'put_yo', True)
+    put_stress_homo = _parse_optional_bool(payload, 'put_stress_homo', True)
+    put_yo_homo = _parse_optional_bool(payload, 'put_yo_homo', True)
+    return (
+        model,
+        voice,
+        input_text,
+        response_format,
+        sample_rate,
+        speed,
+        bitrate,
+        put_accent,
+        put_yo,
+        put_stress_homo,
+        put_yo_homo,
+    )
 
 
 @router.get('/health')
@@ -178,9 +207,19 @@ async def create_audio_speech(request: Request):
         return _openai_error_response('Invalid JSON body.', None, 400)
 
     try:
-        model, voice, input_text, response_format, sample_rate, speed, bitrate = (
-            _parse_speech_payload(payload)
-        )
+        (
+            model,
+            voice,
+            input_text,
+            response_format,
+            sample_rate,
+            speed,
+            bitrate,
+            put_accent,
+            put_yo,
+            put_stress_homo,
+            put_yo_homo,
+        ) = _parse_speech_payload(payload)
         tts_engine = get_tts_engine_dependency()
     except SileroEngineError as error:
         return _openai_error_response(error.message, error.param, error.status_code)
@@ -194,6 +233,10 @@ async def create_audio_speech(request: Request):
             sample_rate=sample_rate,
             speed=speed,
             bitrate=bitrate,
+            put_accent=put_accent,
+            put_yo=put_yo,
+            put_stress_homo=put_stress_homo,
+            put_yo_homo=put_yo_homo,
         )
     except SileroEngineError as error:
         return _openai_error_response(error.message, error.param, error.status_code)

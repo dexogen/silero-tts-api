@@ -71,6 +71,10 @@ curl -s http://localhost:9898/health
 - `sample_rate`: `8000`, `24000`, `48000` (default `48000`)
 - `bitrate`: `64`, `96`, `128`, `192` (для `mp3`/`opus`)
 - `speed`: `0.25..4.0` (default `1.0`)
+- `put_accent`: автопостановка ударений (default `true`)
+- `put_yo`: автопостановка `ё` (default `true`)
+- `put_stress_homo`: автоударение для омографов RU (default `true`)
+- `put_yo_homo`: авто-`ё` для омографов RU (default `true`)
 
 ## Примеры API
 
@@ -105,6 +109,22 @@ curl -X POST http://localhost:9898/v1/audio/speech \
     "speed": 1.1
   }' \
   --output out.mp3
+```
+
+Ударения/омографы (Silero v5 RU):
+```bash
+curl -X POST http://localhost:9898/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "silero-tts-v5-ru",
+    "voice": "xenia",
+    "input": "Пот+ом я откр+ою замок, а потом закр+ою зам+ок.",
+    "put_accent": true,
+    "put_yo": true,
+    "put_stress_homo": true,
+    "put_yo_homo": true
+  }' \
+  --output out_homographs.wav
 ```
 
 ## Docker

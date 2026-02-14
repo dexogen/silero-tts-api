@@ -9,3 +9,8 @@ def test_normalize_tts_text_converts_newlines_to_pauses():
 def test_normalize_tts_text_handles_markdown_blocks_with_strong_pauses():
     text = '# План\n- Первый пункт\n- Второй пункт\nИтог'
     assert normalize_tts_text(text) == 'План. Первый пункт. Второй пункт. Итог.'
+
+
+def test_normalize_tts_text_keeps_stress_markers_for_silero_v5():
+    text = 'Пот+ом\nзамок\nоткроется'
+    assert normalize_tts_text(text) == 'Пот+ом, замок, откроется.'
