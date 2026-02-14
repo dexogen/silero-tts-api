@@ -1,0 +1,42 @@
+services:
+  silero-tts-service:
+    # GHCR image: ghcr.io/dexogen/silero-tts-api:cpu
+    image: "ghcr.io/dexogen/silero-tts-api:cpu"
+    container_name: "silero-tts-service-cpu"
+    build:
+      context: .
+      dockerfile: dockerfile
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    ports:
+      - "9898:9898"
+    restart: unless-stopped
+    environment:
+      # SILERO_DEVICE: auto|cpu|cuda
+      SILERO_DEVICE: cpu
+      # NUMBER_OF_THREADS: positive integer
+      NUMBER_OF_THREADS: 4
+
+  silero-tts-service-gpu:
+    profiles: ["gpu"]
+    # GHCR image: ghcr.io/dexogen/silero-tts-api:cuda
+    image: "ghcr.io/dexogen/silero-tts-api:cuda"
+    container_name: "silero-tts-service-gpu"
+    build:
+      context: .
+      dockerfile: Dockerfile.cuda
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    ports:
+      - "9898:9898"
+    restart: unless-stopped
+    gpus: all
+    environment:
+      # SILERO_DEVICE: auto|cpu|cuda
+      SILERO_DEVICE: cuda
+      # NUMBER_OF_THREADS: positive integer
+      NUMBER_OF_THREADS: 4
