@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
       - "app/**"
       - "main.py"
@@ -62,10 +63,11 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=cpu
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=cpu-
-            type=ref,event=tag
+            type=raw,value=pr,enable=${{ github.event_name == 'pull_request' }}
+            type=raw,value=cpu,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=sha,prefix=cpu-,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=dev,enable=${{ github.ref_name == 'dev' }}
 
       - name: Build CPU image
         uses: docker/build-push-action@v6
@@ -79,7 +81,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Docker metadata (CUDA)
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref_name == 'main'
         id: meta_cuda
         uses: docker/metadata-action@v5
         with:
@@ -91,7 +93,7 @@ jobs:
             type=ref,event=tag,suffix=-cuda
 
       - name: Build CUDA image
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref_name == 'main'
         uses: docker/build-push-action@v6
         with:
           context: .
